@@ -56,3 +56,18 @@ All API keys are encrypted before storage using SecureStorage.
 - Batched concurrent requests with rate limiting
 - Duplicate URL detection and deduplication
 - Automatic retry with fallback strategies
+
+## Ultra-Precise Product Detection
+The Deep Intelligence Scan uses a 6-strategy extraction pipeline:
+1. **Amazon URLs (100% confidence)**: Extracts ASINs from all Amazon link formats
+2. **Amazon Anchor Text (95%)**: Product names from Amazon link text
+3. **Schema.org Data (92%)**: JSON-LD structured product data
+4. **Review Box Widgets (88%)**: Product names from affiliate box markup
+5. **Brand+Model Patterns (85%)**: Strict brand matching with model indicators
+6. **Listicle Headings (65% fallback)**: Only when <3 products found
+
+AI validation ensures products are actually mentioned in content:
+- Exact match verification
+- Word overlap analysis (50-70% threshold)
+- Brand mention validation
+- Quote verification from AI response
