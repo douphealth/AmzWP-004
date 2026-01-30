@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * ConfigPanel | Enterprise Configuration System v81.0
+ * ConfigPanel | Enterprise Configuration System v85.0
  * ============================================================================
  * SOTA Features:
  * - Secure sync encryption/decryption (fixes Promise<string> errors)
@@ -10,11 +10,12 @@
  * - Input validation with error states
  * - Accessibility-first design
  * - Performance optimizations
+ * - Type-safe AmazonRegion handling
  * ============================================================================
  */
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { AppConfig, AIProvider, BoxStyle } from '../types';
+import { AppConfig, AIProvider, BoxStyle, AmazonRegion } from '../types';
 import { testConnection, SecureStorage } from '../utils';
 import Toastify from 'toastify-js';
 
@@ -44,6 +45,11 @@ interface AIProviderConfig {
   color: string;
   description: string;
   supportsCustomModel?: boolean;
+}
+
+interface AmazonRegionOption {
+  value: AmazonRegion;
+  label: string;
 }
 
 // ============================================================================
@@ -115,6 +121,17 @@ const AI_PROVIDERS: AIProviderConfig[] = [
     supportsCustomModel: true,
     models: [],
   },
+];
+
+const AMAZON_REGION_OPTIONS: AmazonRegionOption[] = [
+  { value: 'us-east-1', label: '🇺🇸 United States (amazon.com)' },
+  { value: 'eu-west-1', label: '🇬🇧 United Kingdom (amazon.co.uk)' },
+  { value: 'eu-west-2', label: '🇩🇪 Germany (amazon.de)' },
+  { value: 'eu-west-3', label: '🇫🇷 France (amazon.fr)' },
+  { value: 'ap-northeast-1', label: '🇯🇵 Japan (amazon.co.jp)' },
+  { value: 'ap-south-1', label: '🇮🇳 India (amazon.in)' },
+  { value: 'ap-southeast-1', label: '🇸🇬 Singapore (amazon.sg)' },
+  { value: 'ap-southeast-2', label: '🇦🇺 Australia (amazon.com.au)' },
 ];
 
 // ============================================================================
@@ -300,10 +317,12 @@ const SelectField: React.FC<SelectFieldProps> = ({
   icon,
 }) => (
   <div className="space-y-2">
-    <label className="text-[10px] text-brand-500 font-black uppercase tracking-widest flex items-center gap-2">
-      {icon && <i className={`fa-solid ${icon}`} />}
-      {label}
-    </label>
+    {label && (
+      <label className="text-[10px] text-brand-500 font-black uppercase tracking-widest flex items-center gap-2">
+        {icon && <i className={`fa-solid ${icon}`} />}
+        {label}
+      </label>
+    )}
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
@@ -367,13 +386,13 @@ interface InfoBoxProps {
 }
 
 const InfoBox: React.FC<InfoBoxProps> = ({ type, icon, children }) => {
-  const colors = {
+  const colorMap = {
     info: 'blue',
     warning: 'amber',
     success: 'green',
     error: 'red',
   };
-  const color = colors[type];
+  const color = colorMap[type];
 
   return (
     <div className={`p-4 bg-${color}-500/10 border border-${color}-500/30 rounded-xl`}>
@@ -638,7 +657,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ onSave, initialConfig 
 
       <InfoBox type="warning" icon="fa-triangle-exclamation">
         SerpApi key enables accurate product images and real-time pricing. 
-        Get one at <a href="https://serpapi.com" target="_blank" rel="noopener" className="underline hover:text-amber-300">serpapi.com</a>
+        Get one at <a href="https://serpapi.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-300">serpapi.com</a>
       </InfoBox>
 
       <div className="p-4 bg-dark-950 border border-dark-700 rounded-2xl">
@@ -651,20 +670,17 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ onSave, initialConfig 
             <p className="text-[10px] text-gray-500">Select your marketplace</p>
           </div>
         </div>
-        <SelectField
-          label=""
+        <select
           value={config.amazonRegion}
-          onChange={v => updateConfig('amazonRegion', v)}
-          options={[
-            { value: 'us-east-1', label: '🇺🇸 United States (amazon.com)' },
-            { value: 'eu-west-1', label: '🇬🇧 United Kingdom (amazon.co.uk)' },
-            { value: 'eu-west-2', label: '🇩🇪 Germany (amazon.de)' },
-            { value: 'eu-west-3', label: '🇫🇷 France (amazon.fr)' },
-            { value: 'ap-northeast-1', label: '🇯🇵 Japan (amazon.co.jp)' },
-            { value: 'ap-south-1', label: '🇮🇳 India (amazon.in)' },
-            { value: 'ap-southeast-1', label: '🇦🇺 Australia (amazon.com.au)' },
-          ]}
-        />
+          onChange={e => updateConfig('amazonRegion', e.target.value as AmazonRegion)}
+          className="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all cursor-pointer"
+        >
+          {AMAZON_REGION_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
@@ -684,7 +700,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ onSave, initialConfig 
               onClick={() => handleProviderChange(provider.id)}
               className={`p-3 rounded-xl border-2 transition-all text-left ${
                 config.aiProvider === provider.id
-                  ? `border-${provider.color}-500 bg-${provider.color}-500/10`
+                  ? 'border-brand-500 bg-brand-500/10'
                   : 'border-dark-700 bg-dark-800 hover:border-dark-600'
               }`}
             >
@@ -780,12 +796,12 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ onSave, initialConfig 
               onClick={() => updateConfig('boxStyle', style.id)}
               className={`relative p-4 rounded-xl border-2 transition-all ${
                 config.boxStyle === style.id
-                  ? `border-${style.color}-500 bg-${style.color}-500/10`
+                  ? 'border-brand-500 bg-brand-500/10'
                   : 'border-dark-600 bg-dark-800 hover:border-dark-500'
               }`}
             >
               {config.boxStyle === style.id && (
-                <div className={`absolute -top-2 -right-2 w-5 h-5 bg-${style.color}-500 rounded-full flex items-center justify-center`}>
+                <div className="absolute -top-2 -right-2 w-5 h-5 bg-brand-500 rounded-full flex items-center justify-center">
                   <i className="fa-solid fa-check text-white text-[8px]" />
                 </div>
               )}
