@@ -49,6 +49,24 @@ All API keys are encrypted before storage using SecureStorage.
 - **Smart Auto-Deploy**: Automatically place products in optimal positions based on content relevance
 - **Visual Editor**: Drag-and-drop content blocks with product placement
 - **Multi-Provider AI**: Support for Google Gemini, OpenAI, Anthropic, Groq, and OpenRouter
+- **Dual Product Box Styles**: Toggle between Classic and Premium (Luxe Aurora) designs
+
+## Premium Product Box Design
+Ultra-luxe product box with state-of-the-art design features:
+- **Glass Morphism**: Frosted glass effect with backdrop blur
+- **Aurora Gradients**: Animated multi-color gradient backgrounds
+- **Micro-Interactions**: Hover effects with scale, rotation, and color transitions
+- **Premium Typography**: Black weight fonts with wide tracking
+- **Luxury Badges**: Floating premium badges with glow effects
+- **Trust Footer**: 5 trust signals (Amazon Verified, Secure, Returns, Shipping, Support)
+- **Two Variants**: LUXE_CARD (full featured) and MINIMAL_FLOAT (compact horizontal)
+
+## Smart API Optimization
+SerpAPI usage is optimized to minimize costs:
+- **Session Caching**: Products cached in memory and sessionStorage
+- **24-Hour TTL**: Cached products valid for 24 hours
+- **Cache Hit Logging**: Console logs show cache hits vs API calls
+- **Fallback Images**: Amazon image widgets used when API unavailable
 
 ## Enterprise-Grade Reliability
 - Paginated WordPress API fetching (no 100-post limit)
