@@ -7,6 +7,7 @@ export interface FAQItem {
 }
 
 export type DeploymentMode = 'ELITE_BENTO' | 'TACTICAL_LINK';
+export type BoxStyle = 'CLASSIC' | 'PREMIUM';
 
 export interface AppConfig {
   amazonTag: string;
@@ -22,6 +23,7 @@ export interface AppConfig {
   concurrencyLimit: number; 
   enableSchema: boolean; 
   enableStickyBar: boolean;
+  boxStyle: BoxStyle;
   
   aiProvider: AIProvider;
   aiModel: string;

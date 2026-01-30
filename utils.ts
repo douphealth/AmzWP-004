@@ -2069,8 +2069,55 @@ export const insertIntoContent = (
 };
 
 // ============================================================================
-// AMAZON PRODUCT SEARCH
+// AMAZON PRODUCT SEARCH - WITH ULTRA-SMART CACHING
 // ============================================================================
+
+// Global SerpAPI cache to minimize API calls (persisted in sessionStorage)
+const SerpApiCache = {
+  _cache: new Map<string, { data: ProductDetails; timestamp: number }>(),
+  _initialized: false,
+  
+  _init() {
+    if (this._initialized) return;
+    this._initialized = true;
+    try {
+      const stored = sessionStorage.getItem('serpapi_cache_v2');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        Object.entries(parsed).forEach(([key, value]: [string, any]) => {
+          if (value && value.timestamp && Date.now() - value.timestamp < 24 * 60 * 60 * 1000) {
+            this._cache.set(key, value);
+          }
+        });
+        console.log(`[SerpAPI] Loaded ${this._cache.size} cached products`);
+      }
+    } catch (e) { /* ignore */ }
+  },
+  
+  get(asin: string): ProductDetails | null {
+    this._init();
+    const entry = this._cache.get(asin);
+    if (entry && Date.now() - entry.timestamp < 24 * 60 * 60 * 1000) {
+      console.log(`[SerpAPI] CACHE HIT for ${asin}`);
+      return { ...entry.data, id: `cached-${asin}-${Date.now()}` };
+    }
+    return null;
+  },
+  
+  set(asin: string, data: ProductDetails): void {
+    this._init();
+    this._cache.set(asin, { data, timestamp: Date.now() });
+    try {
+      const obj: Record<string, any> = {};
+      this._cache.forEach((v, k) => { obj[k] = v; });
+      sessionStorage.setItem('serpapi_cache_v2', JSON.stringify(obj));
+    } catch (e) { /* ignore */ }
+  },
+  
+  getStats(): { hits: number; size: number } {
+    return { hits: 0, size: this._cache.size };
+  }
+};
 
 export const fetchProductByASIN = async (
   asin: string,
@@ -2079,6 +2126,12 @@ export const fetchProductByASIN = async (
   if (!asin || asin.length !== 10) {
     console.warn('[fetchProductByASIN] Invalid ASIN:', asin);
     return null;
+  }
+
+  // Check cache first to avoid unnecessary API calls
+  const cached = SerpApiCache.get(asin);
+  if (cached) {
+    return cached;
   }
 
   if (!apiKey) {
@@ -2126,7 +2179,7 @@ export const fetchProductByASIN = async (
       finalImage = `https://ws-na.amazon-adsystem.com/widgets/q?_encoding=UTF8&ASIN=${asin}&Format=_SL250_&ID=AsinImage&ServiceVersion=20070822&WS=1`;
     }
 
-    return {
+    const result: ProductDetails = {
       id: `manual-${asin}-${Date.now()}`,
       asin: product.asin || asin,
       title: product.title || `Amazon Product (${asin})`,
@@ -2143,6 +2196,12 @@ export const fetchProductByASIN = async (
       insertionIndex: -1,
       deploymentMode: 'ELITE_BENTO',
     };
+    
+    // Cache successful result to avoid future API calls
+    SerpApiCache.set(asin, result);
+    console.log(`[SerpAPI] Cached product: ${result.title}`);
+    
+    return result;
   } catch (error) {
     console.warn(`[fetchProductByASIN] Lookup failed for "${asin}":`, error);
     return {

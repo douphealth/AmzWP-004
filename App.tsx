@@ -55,6 +55,7 @@ const DEFAULT_CONFIG: AppConfig = {
   concurrencyLimit: 5,
   enableSchema: true,
   enableStickyBar: true,
+  boxStyle: 'PREMIUM',
   aiProvider: 'gemini',
   aiModel: 'gemini-2.0-flash',
 };

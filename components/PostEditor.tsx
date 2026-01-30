@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, Dispatch, SetStateAction } from 'react';
-import { BlogPost, ProductDetails, AppConfig, DeploymentMode, ComparisonData } from '../types';
+import { BlogPost, ProductDetails, AppConfig, DeploymentMode, ComparisonData, BoxStyle } from '../types';
 import { pushToWordPress, fetchRawPostContent, analyzeContentAndFindProduct, splitContentIntoBlocks, IntelligenceCache, generateProductBoxHtml, generateComparisonTableHtml, fetchProductByASIN } from '../utils';
 import { ProductBoxPreview } from './ProductBoxPreview';
+import { PremiumProductBox } from './PremiumProductBox';
 import { ComparisonTablePreview } from './ComparisonTablePreview';
 import Toastify from 'toastify-js';
 
@@ -538,7 +539,20 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
                                             ) : (
                                                 node.productId && productMap[node.productId] ? (
                                                     <div className="relative">
-                                                        <ProductBoxPreview product={productMap[node.productId]} affiliateTag={config.amazonTag} mode={productMap[node.productId].deploymentMode} />
+                                                        {config.boxStyle === 'PREMIUM' ? (
+                                                            <PremiumProductBox 
+                                                                product={productMap[node.productId]} 
+                                                                affiliateTag={config.amazonTag} 
+                                                                mode={productMap[node.productId].deploymentMode}
+                                                                variant={productMap[node.productId].deploymentMode === 'TACTICAL_LINK' ? 'MINIMAL_FLOAT' : 'LUXE_CARD'}
+                                                            />
+                                                        ) : (
+                                                            <ProductBoxPreview 
+                                                                product={productMap[node.productId]} 
+                                                                affiliateTag={config.amazonTag} 
+                                                                mode={productMap[node.productId].deploymentMode} 
+                                                            />
+                                                        )}
                                                         
                                                         {/* Product Specific Controls */}
                                                         {hoveredNode === node.id && (

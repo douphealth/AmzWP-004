@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppConfig, AIProvider } from '../types';
+import { AppConfig, AIProvider, BoxStyle } from '../types';
 import { testConnection, SecureStorage } from '../utils';
 import Toastify from 'toastify-js';
 
@@ -215,6 +215,56 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ onSave, initialConfig 
 
             {activeTab === 'sota' && (
                 <div className="space-y-4 animate-fade-in">
+                    {/* Product Box Style Toggle */}
+                    <div className="p-5 bg-dark-950 border border-dark-700 rounded-2xl">
+                        <label className="text-[10px] text-brand-500 font-black uppercase tracking-widest mb-4 block">Product Box Design</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setConfig({...config, boxStyle: 'CLASSIC'})}
+                                className={`relative p-4 rounded-xl border-2 transition-all ${
+                                    config.boxStyle === 'CLASSIC' 
+                                        ? 'border-brand-500 bg-brand-500/10' 
+                                        : 'border-dark-600 bg-dark-800 hover:border-dark-500'
+                                }`}
+                            >
+                                {config.boxStyle === 'CLASSIC' && (
+                                    <div className="absolute -top-2 -right-2 w-5 h-5 bg-brand-500 rounded-full flex items-center justify-center">
+                                        <i className="fa-solid fa-check text-white text-[8px]"></i>
+                                    </div>
+                                )}
+                                <i className="fa-solid fa-rectangle-list text-2xl text-gray-400 mb-2 block"></i>
+                                <span className="text-xs font-bold text-white block">Classic</span>
+                                <span className="text-[9px] text-gray-500">Clean & Minimal</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setConfig({...config, boxStyle: 'PREMIUM'})}
+                                className={`relative p-4 rounded-xl border-2 transition-all ${
+                                    config.boxStyle === 'PREMIUM' 
+                                        ? 'border-violet-500 bg-violet-500/10' 
+                                        : 'border-dark-600 bg-dark-800 hover:border-dark-500'
+                                }`}
+                            >
+                                {config.boxStyle === 'PREMIUM' && (
+                                    <div className="absolute -top-2 -right-2 w-5 h-5 bg-violet-500 rounded-full flex items-center justify-center">
+                                        <i className="fa-solid fa-check text-white text-[8px]"></i>
+                                    </div>
+                                )}
+                                <i className="fa-solid fa-gem text-2xl text-violet-400 mb-2 block"></i>
+                                <span className="text-xs font-bold text-white block">Premium</span>
+                                <span className="text-[9px] text-violet-400">Luxe Aurora</span>
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-3">
+                            <i className="fa-solid fa-info-circle mr-1 text-gray-600"></i>
+                            {config.boxStyle === 'PREMIUM' 
+                                ? 'Ultra-premium glass morphism design with aurora gradients and micro-animations.'
+                                : 'Professional clean design with strong visual hierarchy.'
+                            }
+                        </p>
+                    </div>
+                    
                     <div className="flex items-center justify-between p-4 bg-dark-950 border border-dark-700 rounded-2xl">
                         <span className="text-xs font-bold">Inject JSON-LD Schema</span>
                         <input type="checkbox" checked={config.enableSchema} onChange={e => setConfig({...config, enableSchema: e.target.checked})} className="w-5 h-5 accent-brand-500" />
