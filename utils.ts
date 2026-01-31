@@ -1832,21 +1832,11 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 /**
- * Decrypt API key if it's base64 encoded
+ * Get raw API key - just return it as-is
  */
-const decryptApiKey = (key: string): string => {
+const getApiKey = (key: string): string => {
   if (!key) return '';
-  try {
-    if (/^[A-Za-z0-9+/=]+$/.test(key) && key.length > 20) {
-      const decoded = SecureStorage.decryptSync(key);
-      if (/^[a-f0-9]{64}$/i.test(decoded) || decoded.length >= 32) {
-        return decoded;
-      }
-    }
-    return key;
-  } catch {
-    return key;
-  }
+  return key.trim();
 };
 
 /**
@@ -1886,12 +1876,14 @@ export const searchAmazonProduct = async (
   query: string,
   apiKey: string
 ): Promise<Partial<ProductDetails>> => {
-  const decryptedKey = decryptApiKey(apiKey);
+  const cleanKey = getApiKey(apiKey);
 
-  if (!decryptedKey) {
+  if (!cleanKey) {
     console.warn('[SerpAPI] No API key provided');
     return {};
   }
+
+  console.log('[SerpAPI] Using API key:', cleanKey.substring(0, 8) + '...');
 
   const cacheKey = `serp_${hashString(query.toLowerCase())}`;
   const cached = IntelligenceCache.get<Partial<ProductDetails>>(cacheKey);
@@ -1906,7 +1898,7 @@ export const searchAmazonProduct = async (
     const data = await callSerpApiProxy({
       type: 'search',
       query,
-      apiKey: decryptedKey,
+      apiKey: cleanKey,
     });
 
     console.log('[SerpAPI] Response received, results:', data.organic_results?.length || 0);
@@ -1960,9 +1952,9 @@ export const fetchProductByASIN = async (
   asin: string,
   apiKey: string
 ): Promise<ProductDetails | null> => {
-  const decryptedKey = decryptApiKey(apiKey);
+  const cleanKey = getApiKey(apiKey);
 
-  if (!decryptedKey || !asin) {
+  if (!cleanKey || !asin) {
     console.warn('[fetchProductByASIN] Missing API key or ASIN');
     return null;
   }
@@ -1984,7 +1976,7 @@ export const fetchProductByASIN = async (
     const data = await callSerpApiProxy({
       type: 'product',
       asin,
-      apiKey: decryptedKey,
+      apiKey: cleanKey,
     });
 
     const result = data.product_results;
@@ -2113,67 +2105,33 @@ export const splitContentIntoBlocks = (html: string): string[] => {
 };
 
 // ============================================================================
-// PRIORITY CALCULATION
+// PRIORITY CALCULATION - STRICT PRODUCT-ONLY LOGIC
 // ============================================================================
 
 /**
- * Calculate post priority based on content analysis
+ * Calculate post priority - ONLY marks ACTUAL PRODUCT posts as critical
+ * "Best Fitness Trackers" = CRITICAL (fitness trackers are products)
+ * "Best Weight Loss Diets" = LOW (diets are methods, not products)
+ * "Best Running Tips" = LOW (tips are not products)
  */
 export const calculatePostPriority = (
   title: string,
   content: string
-): { 
+): {
   priority: 'critical' | 'high' | 'medium' | 'low';
   type: string;
   status: 'monetized' | 'opportunity';
 } => {
-  const combined = `${title} ${content}`.toLowerCase();
+  const result = analyzePostForPriority(title, content);
 
-  // Check if already monetized
-  const hasAffiliateLinks = /amazon\.com|amzn\.to|affiliate|sponsored|product-box|aawp/i.test(content);
-
-  if (hasAffiliateLinks) {
-    return { priority: 'low', type: 'post', status: 'monetized' };
-  }
-
-  // Critical priority keywords (high buying intent)
-  const criticalKeywords = [
-    'best', 'top 10', 'top 5', 'review', 'vs', 'versus',
-    'comparison', 'buying guide', 'how to buy', 'recommended',
-    'which', 'best budget', 'best premium', 'worth it',
-  ];
-
-  // High priority keywords
-  const highKeywords = [
-    'tips', 'ideas', 'ways to', 'alternatives', 'should you',
-    'guide', 'tutorial', 'how to choose', 'what to look for',
-  ];
-
-  // Determine content type
   let type = 'post';
-  if (/review/i.test(title)) type = 'review';
-  else if (/best|top \d/i.test(title)) type = 'listicle';
-  else if (/how to|guide/i.test(title)) type = 'how-to';
-  else if (/vs|comparison|versus/i.test(title)) type = 'comparison';
+  const titleLower = title.toLowerCase();
+  if (/review/i.test(titleLower) && titleContainsProduct(titleLower)) type = 'review';
+  else if (/best|top \d/i.test(titleLower) && titleContainsProduct(titleLower)) type = 'listicle';
+  else if (/vs|versus/i.test(titleLower) && titleContainsProduct(titleLower)) type = 'comparison';
+  else if (/how to|guide/i.test(titleLower)) type = 'how-to';
 
-  // Check for critical keywords
-  const isCritical = criticalKeywords.some(kw => combined.includes(kw));
-  if (isCritical) {
-    return { priority: 'critical', type, status: 'opportunity' };
-  }
-
-  // Check for high priority keywords
-  const isHigh = highKeywords.some(kw => combined.includes(kw));
-  if (isHigh) {
-    return { priority: 'high', type, status: 'opportunity' };
-  }
-
-  // Check content length (longer content = more opportunity)
-  if (content.length > 3000) {
-    return { priority: 'medium', type, status: 'opportunity' };
-  }
-
-  return { priority: 'medium', type, status: 'opportunity' };
+  return { ...result, type };
 };
 
 // ============================================================================
