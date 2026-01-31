@@ -17,7 +17,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { AppConfig, AIProvider, BoxStyle, AmazonRegion } from '../types';
 import { testConnection, SecureStorage } from '../utils';
-import Toastify from 'toastify-js';
+import { toast } from 'sonner';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -480,41 +480,16 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ onSave, initialConfig 
   const handleTestConnection = useCallback(async () => {
     const validation = validateConfig(config, 'wp');
     if (!validation.isValid) {
-      setValidationErrors(validation.errors);
-      Toastify({ 
-        text: 'Please fill in all required fields', 
-        duration: 3000, 
-        style: { background: '#ef4444' } 
-      }).showToast();
-      return;
-    }
-
-    setTestStatus('testing');
-    try {
-      const result = await testConnection(config);
-      if (result.success) {
-        setTestStatus('success');
-        Toastify({ 
-          text: '✓ Connected to WordPress!', 
-          duration: 3000, 
-          style: { background: '#10b981' } 
-        }).showToast();
+              toast.success('✓ Connected to WordPress!');
+            estStatus('success');
       } else {
-        setTestStatus('error');
-        Toastify({ 
-          text: result.message || 'Connection failed', 
-          duration: 4000, 
-          style: { background: '#ef4444' } 
-        }).showToast();
-      }
+                toast.success('✓ Connected to WordPress!');
+                toast.error(result.message || 'Connection failed');
+          
     } catch (error: any) {
       setTestStatus('error');
-      Toastify({ 
-        text: error.message || 'Connection failed', 
-        duration: 4000, 
-        style: { background: '#ef4444' } 
-      }).showToast();
-    }
+            toast.error(error.message || 'Connection failed');
+        
   }, [config]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
@@ -524,12 +499,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ onSave, initialConfig 
     const validation = validateConfig(config, activeTab);
     if (!validation.isValid) {
       setValidationErrors(validation.errors);
-      Toastify({ 
-        text: 'Please fix validation errors', 
-        duration: 3000, 
-        style: { background: '#ef4444' } 
-      }).showToast();
-      return;
+            toast.error('Please fix validation errors');
+        turn;
     }
 
     setIsSaving(true);
