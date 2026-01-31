@@ -2245,7 +2245,7 @@ export const validateManualUrl = (url: string): { isValid: boolean; normalizedUr
     if (!urlObj.hostname || urlObj.hostname.length < 3) {
       return { isValid: false, error: 'Invalid hostname' };
     }
-    return { isValid: true, normalized };
+    return { isValid: true, normalizedUrl: normalized };
   } catch {
     return { isValid: false, error: 'Invalid URL format' };
   }

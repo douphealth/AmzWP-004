@@ -6,6 +6,12 @@ import { ILoggerService } from './logger-service';
 import { AppConfig, AIProvider } from '../types';
 
 export interface IAiService {
+
+  interface AIResponse {
+  content: string;
+  title?: string;
+  keywords?: string[];
+}
   generateContent(prompt: string, systemPrompt?: string): Promise<AIResponse>;
   analyzeContent(title: string, content: string): Promise<AnalysisResult>;
 }
