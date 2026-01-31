@@ -479,13 +479,15 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ onSave, initialConfig 
 
   const handleTestConnection = useCallback(async () => {
     const validation = validateConfig(config, 'wp');
+        try {
     if (!validation.isValid) {
               toast.success('✓ Connected to WordPress!');
-            estStatus('success');
+            setTestConnectionStatus('success');
       } else {
                 toast.success('✓ Connected to WordPress!');
                 toast.error(result.message || 'Connection failed');
-      setTestConnectionStatus('success');
+        }  
+    
     } catch (error: any) {
       setTestConnectionStatus('error');
             toast.error(error.message || 'Connection failed');
