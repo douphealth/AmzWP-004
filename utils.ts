@@ -617,8 +617,7 @@ export const fetchPageContent = async (
 
     // Strategy 2: Proxy fetch
     const html = await fetchWithSmartProxy(url, { 
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      }, (text: string) => text.length > 200);
+      timeout: PAGE_FETCH_TIMEOUT_MS
     // Extract title
 const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
         let title = titleMatch 
@@ -2245,7 +2244,7 @@ export const validateManualUrl = (url: string): { isValid: boolean; normalizedUr
     if (!urlObj.hostname || urlObj.hostname.length < 3) {
       return { isValid: false, error: 'Invalid hostname' };
     }
-    return { isValid: true, normalizedUrl };
+    return { isValid: true, normalized };
   } catch {
     return { isValid: false, error: 'Invalid URL format' };
   }

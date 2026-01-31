@@ -40,7 +40,7 @@ export class TaskQueue<TInput = unknown, TOutput = unknown> {
     try {
       const result = await this.queue.add(() => task.run(task.input, { signal: controller.signal }));
       this.controllers.delete(task.id);
-      return result;
+      return result as TOutput;
     } catch (error) {
       this.controllers.delete(task.id);
       throw error;

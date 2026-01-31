@@ -3,7 +3,7 @@ import { TYPES } from '../di/types';
 import { ApiClient, apiClient } from '../lib/api-client';
 import { ICacheService } from './cache-service';
 import { ILoggerService } from './logger-service';
-import { AppConfig, AIResponse, AIProvider } from '../types';
+import { AppConfig, AIProvider } from '../types';
 
 export interface IAiService {
   generateContent(prompt: string, systemPrompt?: string): Promise<AIResponse>;

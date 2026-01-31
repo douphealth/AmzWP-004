@@ -70,7 +70,6 @@ const App: React.FC = () => {
                 setStep(AppStep.SITEMAP);
               }}
               allPosts={sitemap.posts}
-              onSwitchPost={setSelectedPost}
             />
           </Suspense>
         )}
