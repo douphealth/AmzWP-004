@@ -65,13 +65,13 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
     // Reduced Motion Preference
     const prefersReducedMotion = useReducedMotion();
     
-    // Keyboard Shortcuts
     useKeyboardShortcuts({
-    'ctrl+z': () => { if (canUndo) { undo(); toast('Undo', { duration: 1500, style: { background: '#6366f1' } }); } },        'meta+z': () => { if (canUndo) { undo(); toast( 'Undo', duration: 1500, style: { background: '#6366f1' } }); } },
-    'meta+z': () => { if (canUndo) { undo(); toast('Undo', { duration: 1500, style: { background: '#6366f1' } }); } },        'meta+shift+z': () => { if (canRedo) { redo(); toast( 'Redo', duration: 1500, style: { background: '#6366f1' } }); } },
-    'ctrl+shift+z': () => { if (canRedo) { redo(); toast('Redo', { duration: 1500, style: { background: '#6366f1' } }); } },    }, { ignoreInputs: true });
-    'meta+shift+z': () => { if (canRedo) { redo(); toast('Redo', { duration: 1500, style: { background: '#6366f1' } }); } },
-            'ctrl+y': () => { if (canRedo) { redo(); toast('Redo', { duration: 1500, style: { background: '#6366f1' } }); } },
+        'ctrl+z': () => { if (canUndo) { undo(); toast('Undo', { duration: 1500, style: { background: '#0ea5e9' } }); } },
+        'meta+z': () => { if (canUndo) { undo(); toast('Undo', { duration: 1500, style: { background: '#0ea5e9' } }); } },
+        'ctrl+shift+z': () => { if (canRedo) { redo(); toast('Redo', { duration: 1500, style: { background: '#0ea5e9' } }); } },
+        'meta+shift+z': () => { if (canRedo) { redo(); toast('Redo', { duration: 1500, style: { background: '#0ea5e9' } }); } },
+        'ctrl+y': () => { if (canRedo) { redo(); toast('Redo', { duration: 1500, style: { background: '#0ea5e9' } }); } },
+    }, { ignoreInputs: true });
 
     // Initialization Logic
     useEffect(() => {
@@ -132,7 +132,7 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
                 setStatus('idle');
             } catch (e: any) {
                 setStatus('error');
-                toast( "Intelligence Protocol Link Failure" });
+                toast("Intelligence Protocol Link Failure");
             }
         };
         init();
@@ -278,7 +278,7 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
         const newNodes = [...editorNodes];
         newNodes.splice(index, 0, newNode);
         setEditorNodes(newNodes);
-        toast( "Asset Injected to Canvas" });
+        toast("Asset Injected to Canvas");
     };
 
     const smartInjectProduct = (productId: string) => {
@@ -287,14 +287,14 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
         
         const targetIndex = findBestInsertionIndex(product, editorNodes);
         injectProduct(productId, targetIndex);
-        toast( `Auto-Placed: ${product.title.substring(0, 20)}...`, style: { background: "#3b82f6" } });
+        toast(`Auto-Placed: ${product.title.substring(0, 20)}...`, { style: { background: "#0ea5e9" } });
     };
 
     const handleAutoPopulate = () => {
         const unplaced = getUnplacedProducts();
         if (unplaced.length === 0) {
-             toast( "All Assets Already Deployed" });
-             return;
+            toast("All Assets Already Deployed");
+            return;
         }
 
         let newNodes = [...editorNodes];
@@ -320,7 +320,7 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
         });
 
         setEditorNodes(newNodes);
-        toast( `Sovereign Automation: ${injectedCount} Assets Deployed`, style: { background: "#3b82f6" } });
+        toast(`Sovereign Automation: ${injectedCount} Assets Deployed`, { style: { background: "#0ea5e9" } });
     };
 
     // --- STANDARD OPERATIONS ---
@@ -331,14 +331,13 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
             const currentHtml = editorNodes.filter(n => n.type === 'HTML').map(n => n.content).join('');
             const res = await analyzeContentAndFindProduct(post.title, currentHtml, config);
             
-            // Handle Products
             if (res.detectedProducts.length > 0) {
                 const newPMap = { ...productMap };
                 res.detectedProducts.forEach(p => newPMap[p.id] = p);
                 setProductMap(newPMap);
-                toast( `Deep Scan Protocol Locked: ${res.detectedProducts.length} Assets Registered`, style: { background: "#3b82f6" } });
+                toast(`Deep Scan Protocol Locked: ${res.detectedProducts.length} Assets Registered`, { style: { background: "#0ea5e9" } });
             } else {
-                toast( "Zero Match: No monetization entities mapped." });
+                toast("Zero Match: No monetization entities mapped.");
             }
 
             // Handle Comparison Table
@@ -352,21 +351,20 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
                     comparisonData: res.comparison
                 });
                 setEditorNodes(newNodes);
-                toast( "Comparison Matrix Generated", style: { background: "#8b5cf6" } });
+                toast("Comparison Matrix Generated", { style: { background: "#0ea5e9" } });
             }
 
         } catch (e: any) {
             console.error(e);
-            // SOTA Error Reporting: Show exact error from the utility function
             const errorMsg = e.message || "Unknown error";
             const displayMsg = errorMsg.length > 80 ? errorMsg.substring(0, 77) + "..." : errorMsg;
-            toast( `Intelligence Failure: ${displayMsg}`, duration: 5000 });
+            toast(`Intelligence Failure: ${displayMsg}`, { duration: 5000 });
         } finally { setStatus('idle'); }
     };
 
     const deleteNode = (id: string) => {
         setEditorNodes(prev => prev.filter(n => n.id !== id));
-        toast( "Block Extinguished" });
+        toast("Block Extinguished");
     };
 
     const moveNode = (index: number, direction: -1 | 1) => {
@@ -385,7 +383,7 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
         if (!node || !node.content) return;
         const cleanContent = node.content.replace(/<img[^>]*>/g, "");
         updateHtmlNode(id, cleanContent);
-        toast( "Visual Artifacts Purged from Block" });
+        toast("Visual Artifacts Purged from Block");
     };
 
     const updateProductMode = (id: string, mode: DeploymentMode) => {
@@ -411,13 +409,13 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
     const handleAddManualProduct = async () => {
         const asin = extractASIN(manualAsin);
         if (!asin) {
-            toast( "Invalid ASIN or Amazon URL" });
+            toast("Invalid ASIN or Amazon URL");
             return;
         }
 
         const existingProduct = Object.values(productMap).find(p => p.asin === asin);
         if (existingProduct) {
-            toast( "Product already in staging area" });
+            toast("Product already in staging area");
             setManualAsin('');
             return;
         }
@@ -427,13 +425,13 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
             const product = await fetchProductByASIN(asin, config.serpApiKey || '');
             if (product) {
                 setProductMap(prev => ({ ...prev, [product.id]: product }));
-                toast( `Added: ${product.title.substring(0, 30)}...` });
+                toast(`Added: ${product.title.substring(0, 30)}...`);
                 setManualAsin('');
             } else {
-                toast( "Failed to fetch product" });
+                toast("Failed to fetch product");
             }
         } catch (e) {
-            toast( "Error adding product" });
+            toast("Error adding product");
         } finally {
             setAddingProduct(false);
         }
@@ -457,12 +455,12 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
         try {
             const html = generateFinalHtml();
             const link = await pushToWordPress(config, currentId, html);
-            toast( "Production Sync Successful" });
+            toast("Production Sync Successful");
             window.open(link, '_blank');
         } catch (e: any) {
             console.error(e);
             const msg = e.message.length > 100 ? e.message.substring(0, 97) + "..." : e.message;
-            toast( msg, duration: 5000 });
+            toast(msg, { duration: 5000 });
         } finally { setStatus('idle'); }
     };
 
