@@ -1821,6 +1821,18 @@ export const analyzeContentAndFindProduct = async (
   content: string,
   config: AppConfig
 ): Promise<AnalysisResult> => {
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
+  console.log('║  PRODUCT DETECTION SYSTEM STARTING                        ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
+  console.log('[DETECTION] Title:', title);
+  console.log('[DETECTION] Content length:', content.length);
+  console.log('[DETECTION] Config:', {
+    aiProvider: config.aiProvider,
+    hasSerpApiKey: !!config.serpApiKey,
+    serpApiKeyLength: config.serpApiKey?.length || 0
+  });
+
   const contentHash = hashString(`${title}_${content.substring(0, 500)}_${content.length}_v2`);
 
   const cached = IntelligenceCache.getAnalysis(contentHash);
@@ -1842,16 +1854,39 @@ export const analyzeContentAndFindProduct = async (
   const cleanContent = stripHtml(truncatedContent);
   const contentLower = cleanContent.toLowerCase();
 
-  console.log('=== PHASE 1: Pattern Detection ===');
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
+  console.log('║  PHASE 1: Pattern Detection                               ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
   const phase1Products = extractProductsPhase1(truncatedContent, cleanContent);
-  console.log('[Phase 1] Found:', phase1Products.length, 'potential products');
-  phase1Products.forEach((p: any, i: number) => {
-    console.log(`  ${i + 1}. ${p.name} (${p.sourceType}, conf: ${p.confidence}${p.asin ? ', ASIN: ' + p.asin : ''})`);
-  });
+  console.log('[Phase 1] ✓ Complete. Found:', phase1Products.length, 'potential products');
+
+  if (phase1Products.length === 0) {
+    console.warn('[Phase 1] ⚠ NO PRODUCTS DETECTED by pattern matching');
+    console.warn('[Phase 1] Content preview:', cleanContent.substring(0, 200));
+  } else {
+    phase1Products.forEach((p: any, i: number) => {
+      console.log(`  [${i + 1}] ${p.name} (${p.sourceType}, confidence: ${p.confidence}${p.asin ? ', ASIN: ' + p.asin : ''})`);
+    });
+  }
+
+  // Check for SerpAPI key
+  if (!config.serpApiKey || config.serpApiKey.trim().length === 0) {
+    console.error('');
+    console.error('╔═══════════════════════════════════════════════════════════╗');
+    console.error('║  ✗✗✗ CRITICAL ERROR: NO SERPAPI KEY ✗✗✗                  ║');
+    console.error('╚═══════════════════════════════════════════════════════════╝');
+    console.error('[DETECTION] Cannot enrich products without SerpAPI key!');
+    console.error('[DETECTION] Go to Settings > Amazon and enter your SerpAPI key');
+    throw new Error('SerpAPI key is required for product detection. Add it in Settings > Amazon.');
+  }
 
   // AGGRESSIVE: If we have Phase 1 products and SerpAPI, use them directly
   if (phase1Products.length > 0 && config.serpApiKey) {
-    console.log('[Phase 1] ⚡ Using Phase 1 products directly with SerpAPI enrichment');
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════════════╗');
+    console.log('║  PHASE 1 ENRICHMENT: Direct SerpAPI Lookup                ║');
+    console.log('╚═══════════════════════════════════════════════════════════╝');
     const quickProducts: ProductDetails[] = [];
 
     for (let i = 0; i < Math.min(phase1Products.length, 10); i++) {
@@ -1908,7 +1943,15 @@ export const analyzeContentAndFindProduct = async (
     }
 
     if (quickProducts.length > 0) {
-      console.log(`[Phase 1] ✓✓✓ SUCCESS! ${quickProducts.length} products found`);
+      console.log('');
+      console.log('╔═══════════════════════════════════════════════════════════╗');
+      console.log(`║  ✓✓✓ PHASE 1 SUCCESS: ${quickProducts.length} PRODUCTS${' '.repeat(Math.max(0, 24 - quickProducts.length.toString().length))}║`);
+      console.log('╚═══════════════════════════════════════════════════════════╝');
+      quickProducts.forEach((p, i) => {
+        console.log(`  [${i + 1}] ${p.title.substring(0, 50)}`);
+        console.log(`      ASIN: ${p.asin}, Price: ${p.price}`);
+      });
+
       IntelligenceCache.setAnalysis(contentHash, { products: quickProducts });
       return {
         detectedProducts: quickProducts,
@@ -1916,7 +1959,8 @@ export const analyzeContentAndFindProduct = async (
         monetizationPotential: quickProducts.length >= 3 ? 'high' : 'medium',
       };
     } else {
-      console.log(`[Phase 1] ✗ No valid products after enrichment`);
+      console.warn('');
+      console.warn('[Phase 1] ✗ No valid products after enrichment - continuing to AI analysis');
     }
   }
 
@@ -1930,7 +1974,12 @@ export const analyzeContentAndFindProduct = async (
     .replace('{{PRE_DETECTED}}', preDetectedList);
 
   try {
-    console.log('[Analysis] Phase 2: AI-powered product verification and discovery');
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════════════╗');
+    console.log('║  PHASE 2: AI Analysis                                     ║');
+    console.log('╚═══════════════════════════════════════════════════════════╝');
+    console.log('[Phase 2] Calling AI provider:', config.aiProvider);
+
     const response = await callAIProvider(
       config,
       ANALYSIS_SYSTEM_PROMPT,
@@ -1938,16 +1987,25 @@ export const analyzeContentAndFindProduct = async (
       { temperature: 0.3, jsonMode: true }
     );
 
+    console.log('[Phase 2] ✓ AI response received');
+
     let parsed: any;
     try {
       const jsonMatch = response.text.match(/\{[\s\S]*\}/);
       parsed = JSON.parse(jsonMatch ? jsonMatch[0] : response.text);
+      console.log('[Phase 2] ✓ JSON parsed successfully');
     } catch (parseError) {
-      console.warn('[Analysis] Failed to parse AI response, using Phase 1 results');
+      console.error('[Phase 2] ✗ Failed to parse AI response:', parseError);
+      console.error('[Phase 2] Raw response:', response.text.substring(0, 200));
       parsed = { products: [], contentType: 'informational' };
     }
 
-    console.log('[Analysis] AI found:', parsed.products?.length || 0, 'products');
+    console.log('[Phase 2] AI detected:', parsed.products?.length || 0, 'products');
+    if (parsed.products && parsed.products.length > 0) {
+      parsed.products.forEach((p: any, i: number) => {
+        console.log(`  [${i + 1}] ${p.title} (confidence: ${p.confidence})`);
+      });
+    }
 
     const validatedProducts = new Map<string, any>();
 
@@ -1995,7 +2053,10 @@ export const analyzeContentAndFindProduct = async (
       }
     }
 
-    console.log('[Analysis] Phase 3: SerpAPI enrichment for', validatedProducts.size, 'products');
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════════════╗');
+    console.log(`║  PHASE 3: SerpAPI Enrichment (${validatedProducts.size} products)${' '.repeat(Math.max(0, 17 - validatedProducts.size.toString().length))}║`);
+    console.log('╚═══════════════════════════════════════════════════════════╝');
 
     const products: ProductDetails[] = [];
     const serpApiQueue: Array<{ key: string; product: any; asin?: string }> = [];
@@ -2014,25 +2075,34 @@ export const analyzeContentAndFindProduct = async (
       const batch = serpApiQueue.slice(i, i + batchSize);
 
       const batchPromises = batch.map(async ({ key, product, asin }) => {
+        console.log(`[Phase 3] Processing: ${product.title || product.searchQuery}`);
         let productData: Partial<ProductDetails> = {};
 
         if (config.serpApiKey) {
           try {
             if (asin) {
-              console.log('[Analysis] Fetching by ASIN:', asin);
+              console.log(`  → ASIN lookup: ${asin}`);
               const asinResult = await fetchProductByASIN(asin, config.serpApiKey);
               if (asinResult) {
                 productData = asinResult;
+                console.log(`  ✓ ASIN lookup successful`);
+              } else {
+                console.log(`  ✗ ASIN lookup returned no data`);
               }
             }
 
             if (!productData.asin) {
               const searchQuery = optimizeSearchQuery(product.searchQuery || product.title);
-              console.log('[Analysis] Searching:', searchQuery);
+              console.log(`  → Searching: "${searchQuery}"`);
               productData = await searchAmazonProduct(searchQuery, config.serpApiKey);
+              if (productData.asin) {
+                console.log(`  ✓ Search successful: ${productData.asin}`);
+              } else {
+                console.log(`  ✗ Search returned no product`);
+              }
             }
           } catch (error: any) {
-            console.error('[Analysis] SerpAPI error for:', product.title, error.message);
+            console.error(`  ✗ SerpAPI error: ${error.message}`);
           }
         }
 
@@ -2042,14 +2112,17 @@ export const analyzeContentAndFindProduct = async (
       const batchResults = await Promise.all(batchPromises);
 
       for (const { product, productData } of batchResults) {
-        if (!productData.asin || !productData.imageUrl || productData.price === '$XX.XX') {
-          console.log('[Analysis] Skipping product with incomplete data:', product.title, {
-            hasAsin: !!productData.asin,
-            hasImage: !!productData.imageUrl,
-            price: productData.price
-          });
+        const hasAsin = !!productData.asin;
+        const hasImage = !!productData.imageUrl;
+        const hasValidPrice = productData.price && productData.price !== '$XX.XX';
+
+        if (!hasAsin || !hasImage || !hasValidPrice) {
+          console.warn(`[Phase 3] ✗ Rejected: ${product.title}`);
+          console.warn(`  Reason: ASIN=${hasAsin}, Image=${hasImage}, Price=${hasValidPrice} (${productData.price})`);
           continue;
         }
+
+        console.log(`[Phase 3] ✓ Accepted: ${productData.title?.substring(0, 40)} (${productData.asin})`);
 
         const insertionIndex = typeof product.paragraphNumber === 'number' ? product.paragraphNumber : 0;
 
@@ -2100,7 +2173,16 @@ export const analyzeContentAndFindProduct = async (
 
     IntelligenceCache.setAnalysis(contentHash, { products, comparison });
 
-    console.log('[Analysis] Complete:', products.length, 'products found');
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════════════╗');
+    console.log(`║  ✓✓✓ DETECTION COMPLETE: ${products.length} PRODUCTS FOUND${' '.repeat(Math.max(0, 17 - products.length.toString().length))}║`);
+    console.log('╚═══════════════════════════════════════════════════════════╝');
+
+    if (products.length === 0) {
+      console.error('[DETECTION] ✗✗✗ ZERO PRODUCTS FOUND!');
+      console.error('[DETECTION] This should not happen if Phase 1 detected products');
+      console.error('[DETECTION] Check SerpAPI responses above for errors');
+    }
 
     return {
       detectedProducts: products,
