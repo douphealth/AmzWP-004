@@ -1789,6 +1789,13 @@ WHAT NOT TO EXTRACT:
 - Descriptive phrases: "the best headphones", "a quality speaker"
 - Services or subscriptions (unless physical products)
 
+COMPARISON TABLE RULES:
+- Set "shouldCreate": true if there are 3+ products AND content type is "listicle" or "comparison"
+- Set "shouldCreate": true if content explicitly compares products side-by-side
+- Set "shouldCreate": false for single product reviews or informational content
+- Include ALL product IDs in the "productIds" array
+- Use a descriptive title like "Best Budget Smartwatches Comparison" or "Top 10 Product Name Comparison"
+
 JSON FORMAT:
 {
   "products": [
@@ -1804,8 +1811,8 @@ JSON FORMAT:
   ],
   "comparison": {
     "shouldCreate": true,
-    "productIds": ["prod-1", "prod-2"],
-    "title": "Comparison title if applicable"
+    "productIds": ["prod-1", "prod-2", "prod-3"],
+    "title": "Descriptive comparison title"
   },
   "contentType": "review|listicle|comparison|how-to|informational",
   "totalProductsMentioned": 1
@@ -1952,9 +1959,22 @@ export const analyzeContentAndFindProduct = async (
         console.log(`      ASIN: ${p.asin}, Price: ${p.price}`);
       });
 
-      IntelligenceCache.setAnalysis(contentHash, { products: quickProducts });
+      // Create comparison table if we have 3+ products
+      let comparison: ComparisonData | undefined;
+      if (quickProducts.length >= 3) {
+        const productIds = quickProducts.slice(0, 10).map(p => p.id);
+        comparison = {
+          title: `${title} - Product Comparison`,
+          productIds,
+          specs: ['Price', 'Rating', 'Reviews'],
+        };
+        console.log(`  ✓ Comparison table created with ${productIds.length} products`);
+      }
+
+      IntelligenceCache.setAnalysis(contentHash, { products: quickProducts, comparison });
       return {
         detectedProducts: quickProducts,
+        comparison,
         contentType: 'informational',
         monetizationPotential: quickProducts.length >= 3 ? 'high' : 'medium',
       };
@@ -2259,6 +2279,7 @@ function extractProductsPhase1(htmlContent: string, textContent: string): Phase1
   const products: Phase1Product[] = [];
   const seen = new Set<string>();
 
+  // Pattern 1: ASIN extraction from Amazon links
   const asinPatterns = [
     /amazon\.com\/(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})/gi,
     /\/dp\/([A-Z0-9]{10})/gi,
@@ -2281,7 +2302,56 @@ function extractProductsPhase1(htmlContent: string, textContent: string): Phase1
     }
   }
 
+  // Pattern 2: Numbered list items (common in "Best X" listicles)
+  // Matches: "1. Product Name", "#1 Product Name", "1) Product Name"
+  const numberedListPattern = /(?:^|\n)\s*(?:\d+[\.\)]\s*|#\d+\s+)([A-Z][A-Za-z0-9\s\-\.]{8,60})(?:\s*[-–—:]|\n)/gm;
+  let match;
+  while ((match = numberedListPattern.exec(textContent)) !== null) {
+    const productName = match[1]?.trim().replace(/[\.\,\!\?\;]+$/, '');
+    if (!productName) continue;
+
+    const key = productName.toLowerCase().replace(/\s+/g, '_');
+    if (seen.has(key) || productName.length < 8) continue;
+
+    // Must contain at least one number OR recognized brand/model word
+    const hasNumber = /\d/.test(productName);
+    const hasBrandWord = /\b(?:Pro|Max|Plus|Ultra|Mini|Lite|Air|Band|Watch|Buds|Charge|Series|Gen|Edition)\b/i.test(productName);
+
+    if (hasNumber || hasBrandWord) {
+      seen.add(key);
+      products.push({
+        name: productName,
+        sourceType: 'numbered_list',
+        confidence: 95,
+      });
+    }
+  }
+
+  // Pattern 3: HTML headers (h2, h3) - common in comparison posts
+  const headerPattern = /<h[23][^>]*>([^<]{8,80})<\/h[23]>/gi;
+  while ((match = headerPattern.exec(htmlContent)) !== null) {
+    const headerText = match[1]?.trim().replace(/^(?:\d+[\.\)]\s*|#\d+\s+)/, '');
+    if (!headerText) continue;
+
+    const key = headerText.toLowerCase().replace(/\s+/g, '_');
+    if (seen.has(key) || headerText.length < 8) continue;
+
+    // Must look like a product name (has brand or model indicators)
+    const looksLikeProduct = /\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Band|Watch|Tracker|Pro|Max|Plus|Ultra|Mini|Lite|\d+)|\d{3,4}[A-Za-z]*)\b/.test(headerText);
+
+    if (looksLikeProduct) {
+      seen.add(key);
+      products.push({
+        name: headerText,
+        sourceType: 'header',
+        confidence: 90,
+      });
+    }
+  }
+
+  // Pattern 4: Comprehensive brand patterns with MORE brands
   const brandPatterns = [
+    /\b(Xiaomi|Huawei|Amazfit|COROS|OnePlus|Oppo|Vivo|Realme|Nothing)\s+([A-Za-z][\w\s\-\.]{3,45})(?=[\.\,\!\?\;\:\)\]\"\']|\s+(?:is|are|was|were|has|have|with|for|features|offers|comes|includes|provides|review)|\s*$)/gi,
     /\b(Apple|Samsung|Sony|Google|Microsoft|Amazon|Nike|Adidas|Nintendo|Bose|JBL|Beats|Sennheiser|Logitech|Razer|Corsair|ASUS|Acer|Dell|HP|Lenovo|Dyson|Shark|Ninja|KitchenAid|Cuisinart|Breville|Vitamix|Instant\s*Pot|Fitbit|Garmin|Canon|Nikon|GoPro|DJI|Anker|Jabra|Philips|Braun|Oral-B|Roomba|iRobot|Eufy|Roborock|Weber|DeWalt|Makita|Milwaukee|Roku|Kindle|Echo|AirPods|PlayStation|Xbox)\s+([A-Za-z0-9][\w\s\-\.]{1,40}?)(?=[\.\,\!\?\;\:\)\]\"\']|\s+(?:is|are|was|were|has|have|with|for|features|offers|comes|includes|provides)|\s*$)/gi,
   ];
 
@@ -2302,9 +2372,10 @@ function extractProductsPhase1(htmlContent: string, textContent: string): Phase1
     }
   }
 
+  // Pattern 5: Standalone products (popular products that don't need brand context)
   const standaloneProducts = [
     /\b(AirPods(?:\s*(?:Pro|Max))?(?:\s*\d+)?)\b/gi,
-    /\b(Galaxy\s*(?:Buds|Watch|Tab|S\d+|Z\s*(?:Fold|Flip))(?:\s*\d+)?(?:\s*(?:Pro|Plus|Ultra|FE))?)\b/gi,
+    /\b(Galaxy\s*(?:Buds|Watch|Tab|S\d+|Z\s*(?:Fold|Flip)|Fit)(?:\s*\d+)?(?:\s*(?:Pro|Plus|Ultra|FE))?)\b/gi,
     /\b(Pixel\s*(?:\d+|Buds|Watch)(?:\s*(?:Pro|a))?)\b/gi,
     /\b(iPhone\s*(?:\d+)?(?:\s*(?:Pro|Max|Plus|SE))?)\b/gi,
     /\b(iPad\s*(?:Pro|Air|Mini)?(?:\s*\d+)?)\b/gi,
@@ -2321,6 +2392,8 @@ function extractProductsPhase1(htmlContent: string, textContent: string): Phase1
     /\b(Roomba\s*[a-z]?\d+)\b/gi,
     /\b(Fitbit\s*(?:Charge|Versa|Sense|Luxe|Inspire)\s*\d*)\b/gi,
     /\b(Garmin\s*(?:Forerunner|Fenix|Venu|Instinct)\s*\d*(?:\s*[A-Za-z]+)?)\b/gi,
+    /\b(Mi\s*(?:Band|Watch|Smart\s*Band)\s*\d+(?:\s*(?:Pro|NFC))?)\b/gi,
+    /\b(Amazfit\s*(?:Band|GTR|GTS|Bip|T-Rex|Cheetah)\s*\d*(?:\s*(?:Pro|Plus|Ultra))?)\b/gi,
   ];
 
   for (const pattern of standaloneProducts) {
