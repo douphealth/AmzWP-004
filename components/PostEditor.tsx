@@ -498,8 +498,12 @@ export const PostEditor: React.FC<PostEditorProps> = ({ post, config, onBack }) 
 
         } catch (e: any) {
             const errorMsg = e.message || "Unknown error";
-            const displayMsg = errorMsg.length > 100 ? errorMsg.substring(0, 97) + "..." : errorMsg;
-            toast(`Scan Failed: ${displayMsg}`, { duration: 6000 });
+            const isSerpError = errorMsg.includes('SerpAPI');
+            const displayMsg = errorMsg.length > 120 ? errorMsg.substring(0, 117) + "..." : errorMsg;
+            toast(isSerpError ? displayMsg : `Scan Failed: ${displayMsg}`, {
+                duration: 8000,
+                style: isSerpError ? { background: '#dc2626' } : undefined,
+            });
         } finally {
             setStatus('idle');
         }

@@ -1821,6 +1821,9 @@ export const analyzeContentAndFindProduct = async (
   if (phase1Products.length > 0 && config.serpApiKey) {
     const quickProducts: ProductDetails[] = [];
     const maxPhase1 = Math.min(phase1Products.length, 12);
+    let lastSerpError: string | null = null;
+    let serpErrorCount = 0;
+    let hasFatalSerpError = false;
 
     for (let i = 0; i < maxPhase1; i++) {
       const p1 = phase1Products[i];
@@ -1832,17 +1835,29 @@ export const analyzeContentAndFindProduct = async (
           try {
             const result = await fetchProductByASIN(p1.asin, config.serpApiKey);
             if (result) productData = result;
-          } catch {
-            // ASIN lookup failed, will try search
+          } catch (e: any) {
+            if (e instanceof SerpApiError && e.isFatal) {
+              hasFatalSerpError = true;
+              lastSerpError = e.message;
+              break;
+            }
           }
         }
 
         if (!productData.asin) {
           try {
-            const searchName = p1.name.startsWith('ASIN:') ? p1.name : p1.name;
-            productData = await searchAmazonProduct(searchName, config.serpApiKey);
-          } catch {
-            // Search failed
+            productData = await searchAmazonProduct(p1.name, config.serpApiKey);
+          } catch (e: any) {
+            if (e instanceof SerpApiError && e.isFatal) {
+              hasFatalSerpError = true;
+              lastSerpError = e.message;
+              break;
+            }
+            if (e instanceof SerpApiError) {
+              serpErrorCount++;
+              lastSerpError = e.message;
+            }
+            continue;
           }
         }
 
@@ -1875,9 +1890,21 @@ export const analyzeContentAndFindProduct = async (
         if (i < maxPhase1 - 1) {
           await sleep(120);
         }
-      } catch {
-        // Error enriching product, continue to next
+      } catch (e: any) {
+        if (e instanceof SerpApiError && e.isFatal) {
+          hasFatalSerpError = true;
+          lastSerpError = e.message;
+          break;
+        }
       }
+    }
+
+    if (hasFatalSerpError && lastSerpError) {
+      throw new Error(`SerpAPI Error: ${lastSerpError}`);
+    }
+
+    if (quickProducts.length === 0 && serpErrorCount >= Math.min(maxPhase1, 3) && lastSerpError) {
+      throw new Error(`SerpAPI failed for all products: ${lastSerpError}`);
     }
 
     if (quickProducts.length > 0) {
@@ -1977,8 +2004,12 @@ export const analyzeContentAndFindProduct = async (
       }
     }
 
+    let serpBatchError: string | null = null;
+    let serpBatchFatal = false;
+
     const batchSize = 3;
     for (let i = 0; i < serpApiQueue.length; i += batchSize) {
+      if (serpBatchFatal) break;
       const batch = serpApiQueue.slice(i, i + batchSize);
 
       const batchPromises = batch.map(async ({ key, product, asin }) => {
@@ -1997,8 +2028,13 @@ export const analyzeContentAndFindProduct = async (
               const searchQuery = optimizeSearchQuery(product.searchQuery || product.title);
               productData = await searchAmazonProduct(searchQuery, config.serpApiKey);
             }
-          } catch {
-            // SerpAPI error, skip
+          } catch (e: any) {
+            if (e instanceof SerpApiError && e.isFatal) {
+              serpBatchFatal = true;
+              serpBatchError = e.message;
+            } else if (e instanceof SerpApiError) {
+              serpBatchError = e.message;
+            }
           }
         }
 
@@ -2050,6 +2086,14 @@ export const analyzeContentAndFindProduct = async (
       }
     }
 
+    if (products.length === 0 && serpBatchFatal && serpBatchError) {
+      throw new Error(`SerpAPI Error: ${serpBatchError}`);
+    }
+
+    if (products.length === 0 && serpBatchError && validatedProducts.size > 0) {
+      throw new Error(`Found ${validatedProducts.size} products in content but SerpAPI failed: ${serpBatchError}`);
+    }
+
     let comparison: ComparisonData | undefined;
     if (parsed.comparison?.shouldCreate && products.length >= 2) {
       const productIds = products.slice(0, 5).map(p => p.id);
@@ -2078,8 +2122,13 @@ export const analyzeContentAndFindProduct = async (
     };
 
   } catch (error: any) {
+    if (error.message?.includes('SerpAPI Error:') || error.message?.includes('SerpAPI failed')) {
+      throw error;
+    }
+
     if (phase1Products.length > 0 && config.serpApiKey) {
       const fallbackProducts: ProductDetails[] = [];
+      let fallbackSerpError: string | null = null;
 
       for (const p1 of phase1Products.slice(0, 8)) {
         try {
@@ -2088,15 +2137,16 @@ export const analyzeContentAndFindProduct = async (
             try {
               const asinResult = await fetchProductByASIN(p1.asin, config.serpApiKey);
               if (asinResult) productData = asinResult;
-            } catch {
-              // ASIN lookup failed
+            } catch (e: any) {
+              if (e instanceof SerpApiError && e.isFatal) throw e;
             }
           }
           if (!productData.asin) {
             try {
               productData = await searchAmazonProduct(p1.name, config.serpApiKey);
-            } catch {
-              // Search failed
+            } catch (e: any) {
+              if (e instanceof SerpApiError && e.isFatal) throw e;
+              if (e instanceof SerpApiError) fallbackSerpError = e.message;
             }
           }
 
@@ -2136,9 +2186,17 @@ export const analyzeContentAndFindProduct = async (
           monetizationPotential: 'medium',
         };
       }
+
+      if (fallbackSerpError) {
+        throw new Error(`SerpAPI Error: ${fallbackSerpError}`);
+      }
     }
 
-    throw new Error(`AI analysis failed: ${error.message}`);
+    const phase1Count = phase1Products.length;
+    const detail = phase1Count > 0
+      ? `Detected ${phase1Count} products in content but Amazon lookup failed.`
+      : error.message;
+    throw new Error(`Scan failed: ${detail}`);
   }
 };
 
@@ -2389,9 +2447,17 @@ const getApiKey = (key: string): string => {
   return key.trim();
 };
 
-/**
- * Call SerpAPI via Edge Function (bypasses CORS)
- */
+class SerpApiError extends Error {
+  public readonly statusCode: number;
+  public readonly isFatal: boolean;
+  constructor(message: string, statusCode: number, isFatal: boolean = false) {
+    super(message);
+    this.name = 'SerpApiError';
+    this.statusCode = statusCode;
+    this.isFatal = isFatal;
+  }
+}
+
 const callSerpApiProxy = async (params: {
   type: 'search' | 'product';
   query?: string;
@@ -2399,6 +2465,10 @@ const callSerpApiProxy = async (params: {
   apiKey: string;
 }): Promise<any> => {
   const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/serpapi-proxy`;
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new SerpApiError('Supabase not configured. Check your environment variables.', 0, true);
+  }
 
   const response = await fetchWithTimeout(edgeFunctionUrl, 30000, {
     method: 'POST',
@@ -2411,7 +2481,9 @@ const callSerpApiProxy = async (params: {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Edge function error: ${response.status}`);
+    const msg = errorData.error || `SerpAPI proxy error: ${response.status}`;
+    const isFatal = response.status === 401 || response.status === 403;
+    throw new SerpApiError(msg, response.status, isFatal);
   }
 
   return response.json();
@@ -2491,7 +2563,7 @@ export const searchAmazonProduct = async (
   const cleanKey = getApiKey(apiKey);
 
   if (!cleanKey) {
-    return {};
+    throw new SerpApiError('SerpAPI key is empty', 0, true);
   }
 
   const dedupKey = `search:${query.toLowerCase().trim()}`;
@@ -2499,48 +2571,43 @@ export const searchAmazonProduct = async (
 
   const cacheKey = `serp_${hashString(query.toLowerCase())}`;
   const cached = IntelligenceCache.get<Partial<ProductDetails>>(cacheKey);
-  if (cached && cached.asin && cached.price !== '$XX.XX' && cached.imageUrl) {
+  if (cached && cached.asin) {
     return cached;
   }
 
-  try {
-    const data = await callSerpApiProxy({
-      type: 'search',
-      query,
-      apiKey: cleanKey,
-    });
+  const data = await callSerpApiProxy({
+    type: 'search',
+    query,
+    apiKey: cleanKey,
+  });
 
-    const allResults = [
-      ...(data.organic_results || []),
-      ...(data.shopping_results || []),
-    ];
+  const allResults = [
+    ...(data.organic_results || []),
+    ...(data.shopping_results || []),
+  ];
 
-    if (allResults.length === 0) {
-      return {};
-    }
-
-    const result = allResults.find(r => r.asin && (extractImage(r) || r.thumbnail)) || allResults[0];
-
-    const product: Partial<ProductDetails> = {
-      asin: result.asin || '',
-      title: result.title || query,
-      price: extractPrice(result),
-      imageUrl: extractImage(result),
-      rating: extractRating(result),
-      reviewCount: extractReviewCount(result),
-      prime: result.is_prime || result.prime || false,
-      brand: result.brand || '',
-    };
-
-    if (product.asin && product.price !== '$XX.XX') {
-      IntelligenceCache.set(cacheKey, product, CACHE_TTL_MS);
-    }
-
-    return product;
-
-  } catch {
+  if (allResults.length === 0) {
     return {};
   }
+
+  const result = allResults.find(r => r.asin && (extractImage(r) || r.thumbnail)) || allResults[0];
+
+  const product: Partial<ProductDetails> = {
+    asin: result.asin || '',
+    title: result.title || query,
+    price: extractPrice(result),
+    imageUrl: extractImage(result),
+    rating: extractRating(result),
+    reviewCount: extractReviewCount(result),
+    prime: result.is_prime || result.prime || false,
+    brand: result.brand || '',
+  };
+
+  if (product.asin) {
+    IntelligenceCache.set(cacheKey, product, CACHE_TTL_MS);
+  }
+
+  return product;
 
   }); // end deduplicateRequest
 };
@@ -2629,7 +2696,7 @@ export const fetchProductByASIN = async (
   return deduplicateRequest(`product:${asin}`, async () => {
 
   const cached = IntelligenceCache.getProduct(asin);
-  if (cached && cached.price !== '$XX.XX' && cached.imageUrl) {
+  if (cached) {
     return cached;
   }
 
@@ -2683,9 +2750,7 @@ export const fetchProductByASIN = async (
       deploymentMode: 'ELITE_BENTO',
     };
 
-    if (product.price !== '$XX.XX' && product.imageUrl) {
-      IntelligenceCache.setProduct(asin, product);
-    }
+    IntelligenceCache.setProduct(asin, product);
 
     return product;
 
